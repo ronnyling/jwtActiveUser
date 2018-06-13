@@ -33,6 +33,7 @@ public class User {
 
   private Date lastAccessed;
   private String lastToken;
+  private Date dateGenerated;
 
   @ElementCollection(fetch = FetchType.EAGER)
   List<Role> roles;
@@ -84,4 +85,8 @@ public class User {
   public String getLastToken(){return lastToken;}
 
   public void setLastToken(String lastToken){this.lastToken = lastToken;}
+
+  public Date getDateGenerated(){ return dateGenerated;  }
+
+  public void setDateGenerated(Date dateGenerated){this.dateGenerated = dateGenerated;}
 }

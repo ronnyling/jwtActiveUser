@@ -14,6 +14,9 @@ import jdk.nashorn.internal.runtime.logging.Logger;
 import lombok.extern.slf4j.Slf4j;
 import murraco.model.User;
 import murraco.repository.UserRepository;
+import org.joda.time.Instant;
+import org.joda.time.Interval;
+import org.joda.time.ReadablePeriod;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -69,11 +72,17 @@ public class JwtTokenProvider {
     token = Jwts.builder()//
         .setClaims(claims)//
         .setIssuedAt(now)//
-        .setExpiration(validity)//
+        //.setExpiration(validity)//
         .signWith(SignatureAlgorithm.HS256, secretKey)//
         .compact();
     //update token with user
-    userRepository.findByUsername(username).setLastToken(token);
+    User user = userRepository.findByUsername(username);
+    log.info(now + " now and repotime " + user.getLastAccessed());
+    user.setLastAccessed(now);
+    user.setLastToken(token);
+    user.setDateGenerated(now);
+    userRepository.save(user);
+
 
     return token;
   }
@@ -119,19 +128,38 @@ public class JwtTokenProvider {
 
       //log.info(userRepository.findByUsername(username).getLastToken().toString());
 
-      if (userRepository.findByUsername(username).getLastToken() != null && userRepository.findByUsername(username).getLastToken().equals(token)) {
-        storedLastAccessed = userRepository.findByUsername(username).getLastAccessed();
-        if (now.compareTo(storedLastAccessed) > 10 * 1000) {   //Milli-S
-          log.info("Should Expire");
-          return false;
-        } else {
-          log.info("Should extend lastAccessed");
-          //update lastAccessedDate
-          User user = userRepository.findByUsername(username);
-          log.info(now+" now and repotime "+user.getLastAccessed());
-          user.setLastAccessed(now);
-          userRepository.save(user);
-          return true;
+      if (userRepository.findByUsername(username).getLastToken() != null ) {
+        if(userRepository.findByUsername(username).getLastToken().equals(token)) {
+          storedLastAccessed = userRepository.findByUsername(username).getLastAccessed();
+          Long timeDiff = now.getTime() - storedLastAccessed.getTime();
+          //log.info(String.valueOf(now.getTime()-storedLastAccessed.getTime()));
+
+          if (timeDiff > 100 * 1000) {   //Milli-S
+            log.info("Should Expire");
+            return false;
+          } else {
+            log.info("Should extend lastAccessed");
+            //update lastAccessedDate
+            User user = userRepository.findByUsername(username);
+            log.info(now + " now and repotime " + user.getLastAccessed());
+            user.setLastAccessed(now);
+            userRepository.save(user);
+            return true;
+          }
+        }else{
+          log.info("token existing in database");
+          log.info(String.valueOf(userRepository.findByUsername(username).getDateGenerated().compareTo(now)));
+          if(userRepository.findByUsername(username).getDateGenerated().compareTo(now)>0){
+            log.info("update token and last accessed");
+            User user = userRepository.findByUsername(username);
+            user.setLastToken(token);
+            user.setLastAccessed(now);
+            userRepository.save(user);
+            return true;
+          }else{
+            log.info("fail if token is not newer than last accessed");
+            return false;
+          }
         }
       } else {
         log.info("Initialize token and lastAccessed" + userRepository.findByUsername(username));
